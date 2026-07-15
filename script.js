@@ -1,7 +1,6 @@
 "use strict";
 
 const TILE_VALUES = [1, 2, 3, 4, 5, 6, 7, 8, 9];
-const DICE_GLYPHS = ["⚀", "⚁", "⚂", "⚃", "⚄", "⚅"];
 const BEST_SCORE_KEY = "shut-the-box-best-score-v1";
 
 const tileElements = [...document.querySelectorAll(".number-tile")];
@@ -25,6 +24,23 @@ let rolling = false;
 let roundOver = false;
 let rollToken = 0;
 let bestScore = readBestScore();
+
+function buildDie(die) {
+  die.replaceChildren();
+  die.dataset.face = "1";
+
+  for (let position = 1; position <= 9; position += 1) {
+    const pip = document.createElement("span");
+    pip.className = `pip pip-${position}`;
+    pip.setAttribute("aria-hidden", "true");
+    die.append(pip);
+  }
+}
+
+function setDieFace(die, value, label) {
+  die.dataset.face = String(value);
+  die.setAttribute("aria-label", `${label}: ${value}`);
+}
 
 function readBestScore() {
   try {
@@ -112,10 +128,8 @@ function finishRound(message) {
 }
 
 function settleDice(first, second) {
-  dieOne.textContent = DICE_GLYPHS[first - 1];
-  dieTwo.textContent = DICE_GLYPHS[second - 1];
-  dieOne.setAttribute("aria-label", `First die: ${first}`);
-  dieTwo.setAttribute("aria-label", `Second die: ${second}`);
+  setDieFace(dieOne, first, "First die");
+  setDieFace(dieTwo, second, "Second die");
 
   currentRoll = first + second;
   rollTotalElement.textContent = String(currentRoll);
@@ -151,8 +165,8 @@ function rollDice() {
 
   let shuffleCount = 0;
   const shuffle = window.setInterval(() => {
-    dieOne.textContent = DICE_GLYPHS[randomDie() - 1];
-    dieTwo.textContent = DICE_GLYPHS[randomDie() - 1];
+    setDieFace(dieOne, randomDie(), "First die");
+    setDieFace(dieTwo, randomDie(), "Second die");
     shuffleCount += 1;
 
     if (shuffleCount >= 7) {
@@ -216,10 +230,8 @@ function newGame() {
 
   dieOne.classList.remove("rolling");
   dieTwo.classList.remove("rolling");
-  dieOne.textContent = DICE_GLYPHS[0];
-  dieTwo.textContent = DICE_GLYPHS[0];
-  dieOne.setAttribute("aria-label", "First die");
-  dieTwo.setAttribute("aria-label", "Second die");
+  setDieFace(dieOne, 1, "First die");
+  setDieFace(dieTwo, 1, "Second die");
   rollTotalElement.textContent = "—";
   setInstruction("Roll the dice to begin.");
   updateDisplay();
@@ -233,4 +245,6 @@ rollButton.addEventListener("click", rollDice);
 shutButton.addEventListener("click", shutSelected);
 newGameButton.addEventListener("click", newGame);
 
+buildDie(dieOne);
+buildDie(dieTwo);
 newGame();
