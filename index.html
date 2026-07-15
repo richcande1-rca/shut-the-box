@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#160b08" />
+  <title>Shut the Box</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <div class="room-glow" aria-hidden="true"></div>
+
+  <main class="game-shell">
+    <header class="game-header">
+      <div>
+        <p class="eyebrow">A CLASSIC TAVERN GAME</p>
+        <h1>SHUT THE BOX</h1>
+      </div>
+      <button class="small-button" id="newGameButton" type="button">NEW GAME</button>
+    </header>
+
+    <section class="board" aria-label="Shut the Box game board">
+      <span class="corner corner-one" aria-hidden="true"></span>
+      <span class="corner corner-two" aria-hidden="true"></span>
+      <span class="corner corner-three" aria-hidden="true"></span>
+      <span class="corner corner-four" aria-hidden="true"></span>
+
+      <div class="board-well">
+        <div class="tile-rack" id="tileRack" aria-label="Number tiles">
+          <button class="number-tile" type="button" data-value="1" aria-label="Tile 1"><span>1</span></button>
+          <button class="number-tile" type="button" data-value="2" aria-label="Tile 2"><span>2</span></button>
+          <button class="number-tile" type="button" data-value="3" aria-label="Tile 3"><span>3</span></button>
+          <button class="number-tile" type="button" data-value="4" aria-label="Tile 4"><span>4</span></button>
+          <button class="number-tile" type="button" data-value="5" aria-label="Tile 5"><span>5</span></button>
+          <button class="number-tile" type="button" data-value="6" aria-label="Tile 6"><span>6</span></button>
+          <button class="number-tile" type="button" data-value="7" aria-label="Tile 7"><span>7</span></button>
+          <button class="number-tile" type="button" data-value="8" aria-label="Tile 8"><span>8</span></button>
+          <button class="number-tile" type="button" data-value="9" aria-label="Tile 9"><span>9</span></button>
+        </div>
+
+        <div class="felt-tray">
+          <div class="score-strip" aria-label="Score information">
+            <div>
+              <span>OPEN TOTAL</span>
+              <strong id="openTotal">45</strong>
+            </div>
+            <div>
+              <span>BEST</span>
+              <strong id="bestScore">—</strong>
+            </div>
+          </div>
+
+          <div class="dice-stage" aria-label="Dice tray">
+            <div class="dice" aria-live="polite">
+              <div class="die" id="dieOne" aria-label="First die">⚀</div>
+              <div class="die" id="dieTwo" aria-label="Second die">⚀</div>
+            </div>
+            <div class="roll-readout">
+              <span>ROLL</span>
+              <strong id="rollTotal">—</strong>
+            </div>
+          </div>
+
+          <p class="instruction" id="instruction" aria-live="polite">Roll the dice to begin.</p>
+
+          <div class="selection-meter" id="selectionMeter">
+            <span>SELECTED</span>
+            <strong id="selectedTotal">0</strong>
+            <span class="slash">/</span>
+            <strong id="targetTotal">—</strong>
+          </div>
+
+          <div class="controls">
+            <button class="action-button roll-button" id="rollButton" type="button">ROLL DICE</button>
+            <button class="action-button shut-button" id="shutButton" type="button" disabled>SHUT SELECTED</button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="rules" aria-label="How to play">
+      <strong>ROLL. CHOOSE. SHUT.</strong>
+      <p>After each roll, tap any open tiles whose numbers add up to the dice total. Shut every tile to win. If no combination works, your score is the sum left open. Lower is better.</p>
+    </section>
+  </main>
+
+  <script src="script.js"></script>
+</body>
+</html>
