@@ -64,6 +64,16 @@
 
           <p class="instruction" id="instruction" aria-live="polite">Roll the dice to begin.</p>
 
+          <div class="round-result" id="roundResult" role="status" aria-live="assertive" hidden>
+            <p class="round-result-title" id="roundResultTitle">ROUND OVER</p>
+            <div class="round-result-score">
+              <span>SCORE</span>
+              <strong id="roundResultScore">0</strong>
+            </div>
+            <p class="round-result-detail" id="roundResultDetail"></p>
+            <button class="action-button roll-button result-button" id="playAgainButton" type="button">PLAY AGAIN</button>
+          </div>
+
           <div class="selection-meter" id="selectionMeter">
             <span>SELECTED</span>
             <strong id="selectedTotal">0</strong>
