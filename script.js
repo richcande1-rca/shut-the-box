@@ -16,6 +16,11 @@ const instructionElement = document.querySelector("#instruction");
 const rollButton = document.querySelector("#rollButton");
 const shutButton = document.querySelector("#shutButton");
 const newGameButton = document.querySelector("#newGameButton");
+const roundResult = document.querySelector("#roundResult");
+const roundResultTitle = document.querySelector("#roundResultTitle");
+const roundResultScore = document.querySelector("#roundResultScore");
+const roundResultDetail = document.querySelector("#roundResultDetail");
+const playAgainButton = document.querySelector("#playAgainButton");
 
 let openTiles = new Set(TILE_VALUES);
 let selectedTiles = new Set();
@@ -86,6 +91,20 @@ function setInstruction(text) {
   instructionElement.textContent = text;
 }
 
+function hideRoundResult() {
+  roundResult.hidden = true;
+  roundResultTitle.textContent = "ROUND OVER";
+  roundResultScore.textContent = "0";
+  roundResultDetail.textContent = "";
+}
+
+function showRoundResult(title, score, detail) {
+  roundResultTitle.textContent = title;
+  roundResultScore.textContent = String(score);
+  roundResultDetail.textContent = detail;
+  roundResult.hidden = false;
+}
+
 function updateDisplay() {
   const selectedTotal = sum(selectedTiles);
   const openTotal = sum(openTiles);
@@ -111,7 +130,7 @@ function updateDisplay() {
   shutButton.disabled = rolling || roundOver || currentRoll === null || selectedTotal !== currentRoll;
 }
 
-function finishRound(message) {
+function finishRound(detail, title = "ROUND OVER") {
   roundOver = true;
   currentRoll = null;
   selectedTiles.clear();
@@ -123,7 +142,12 @@ function finishRound(message) {
     saveBestScore(score);
   }
 
-  setInstruction(isBest && score !== 0 ? `${message} New best: ${score}.` : message);
+  const resultDetail = isBest && score !== 0
+    ? `${detail} New best score.`
+    : detail;
+
+  setInstruction(title === "SHUT THE BOX" ? "Perfect round." : "No move available.");
+  showRoundResult(title, score, resultDetail);
   updateDisplay();
 }
 
@@ -139,7 +163,8 @@ function settleDice(first, second) {
   dieTwo.classList.remove("rolling");
 
   if (!hasCombination(openTiles, currentRoll)) {
-    finishRound(`No open combination makes ${currentRoll}. Final score: ${sum(openTiles)}.`);
+    const deadRoll = currentRoll;
+    finishRound(`No open combination makes ${deadRoll}.`);
     return;
   }
 
@@ -212,7 +237,7 @@ function shutSelected() {
 
   if (openTiles.size === 0) {
     if (bestScore !== 0) saveBestScore(0);
-    finishRound("SHUT THE BOX. Perfect score: 0.");
+    finishRound("Every tile is shut.", "SHUT THE BOX");
     return;
   }
 
@@ -233,6 +258,7 @@ function newGame() {
   setDieFace(dieOne, 1, "First die");
   setDieFace(dieTwo, 1, "Second die");
   rollTotalElement.textContent = "—";
+  hideRoundResult();
   setInstruction("Roll the dice to begin.");
   updateDisplay();
 }
@@ -244,6 +270,7 @@ tileElements.forEach((tile) => {
 rollButton.addEventListener("click", rollDice);
 shutButton.addEventListener("click", shutSelected);
 newGameButton.addEventListener("click", newGame);
+playAgainButton.addEventListener("click", newGame);
 
 buildDie(dieOne);
 buildDie(dieTwo);
