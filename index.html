@@ -104,20 +104,39 @@
       </div>
     </section>
 
-    <section class="daily-board" aria-label="Today's board">
+    <section class="daily-board" aria-label="Today's leaderboard">
       <div class="daily-board-heading">
         <div>
           <span>TODAY’S BOARD</span>
-          <strong>Your official run</strong>
+          <strong>Lowest score leads</strong>
         </div>
         <p>Rolls used: <strong id="challengeRoll">0</strong></p>
       </div>
-      <div class="daily-board-row">
-        <span class="rank-cell">—</span>
-        <strong class="name-cell">YOU</strong>
+
+      <div class="daily-board-row your-score-row">
+        <span class="rank-cell" id="challengeRank">—</span>
+        <strong class="name-cell" id="challengeName">YOU</strong>
         <span class="score-cell" id="challengeScore">—</span>
       </div>
-      <p class="daily-board-note">Shared rankings need the online score service. Today’s challenge and score lock are live now.</p>
+
+      <form class="score-submit" id="scoreForm" hidden>
+        <label for="playerName">PUT TODAY’S SCORE ON THE BOARD</label>
+        <div>
+          <input id="playerName" name="playerName" type="text" maxlength="20" autocomplete="nickname" placeholder="Your name" required />
+          <button class="small-button submit-score-button" id="submitScoreButton" type="submit">POST SCORE</button>
+        </div>
+      </form>
+      <p class="submission-status" id="submissionStatus" aria-live="polite"></p>
+
+      <div class="leaderboard-columns" aria-hidden="true">
+        <span>#</span>
+        <span>PLAYER</span>
+        <span>SCORE</span>
+      </div>
+      <div class="leaderboard-rows" id="leaderboardRows" aria-live="polite">
+        <p class="leaderboard-message">Loading today’s board…</p>
+      </div>
+      <p class="daily-board-note">Scores are checked against today’s exact dice sequence before they appear.</p>
     </section>
 
     <section class="rules" aria-label="How to play">
