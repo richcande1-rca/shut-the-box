@@ -1,14 +1,17 @@
 {
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "shut-the-box-api",
+  "main": "api/worker.js",
   "compatibility_date": "2026-07-16",
   "observability": {
     "enabled": true
   },
-  "assets": {
-    "directory": "."
-  },
-  "compatibility_flags": [
-    "nodejs_compat"
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "shut-the-box",
+      "database_id": "50b2236c-7a12-420e-a83b-38288c2422f5",
+      "migrations_dir": "api/migrations"
+    }
   ]
 }
