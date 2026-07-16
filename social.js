@@ -119,8 +119,13 @@
   }
 
   function decorateCurrentLeader() {
-    leaderboardRows.querySelectorAll(".leader-badge").forEach((badge) => badge.remove());
     const firstRow = leaderboardRows.querySelector(".leaderboard-row");
+    const existingBadges = [...leaderboardRows.querySelectorAll(".leader-badge")];
+
+    existingBadges.forEach((badge) => {
+      if (!firstRow || !firstRow.contains(badge)) badge.remove();
+    });
+
     if (!firstRow) return;
     addBadge(firstRow.querySelector(".name-cell"), "LEADING", "leader-badge");
   }
