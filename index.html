@@ -10,6 +10,7 @@
   <link rel="stylesheet" href="round.css" />
   <link rel="stylesheet" href="cube-dice.css" />
   <link rel="stylesheet" href="daily.css" />
+  <link rel="stylesheet" href="social.css" />
 </head>
 <body data-mode="daily">
   <div class="room-glow" aria-hidden="true"></div>
@@ -113,6 +114,12 @@
         <p>Rolls used: <strong id="challengeRoll">0</strong></p>
       </div>
 
+      <div class="previous-winner" id="previousWinner" hidden>
+        <span>YESTERDAY’S WINNER</span>
+        <strong id="previousWinnerName">—</strong>
+        <span class="previous-winner-score">SCORE <strong id="previousWinnerScore">—</strong></span>
+      </div>
+
       <div class="daily-board-row your-score-row">
         <span class="rank-cell" id="challengeRank">—</span>
         <strong class="name-cell" id="challengeName">YOU</strong>
@@ -137,6 +144,29 @@
         <p class="leaderboard-message">Loading today’s board…</p>
       </div>
       <p class="daily-board-note">Scores are checked against today’s exact dice sequence before they appear.</p>
+
+      <section class="table-talk" aria-labelledby="tableTalkTitle">
+        <div class="table-talk-heading">
+          <div>
+            <span>TABLE TALK</span>
+            <strong id="tableTalkTitle">Today’s comments</strong>
+          </div>
+          <p>One short comment per player.</p>
+        </div>
+
+        <form class="comment-form" id="commentForm" hidden>
+          <textarea id="commentInput" name="comment" maxlength="180" placeholder="That last roll killed me…" required></textarea>
+          <div class="comment-form-footer">
+            <span class="comment-count" id="commentCount">0 / 180</span>
+            <button class="small-button" id="commentButton" type="submit">POST COMMENT</button>
+          </div>
+        </form>
+        <p class="comment-gate" id="commentGate">Post today’s score to join the table talk.</p>
+        <p class="comment-status" id="commentStatus" aria-live="polite"></p>
+        <div class="comments-list" id="commentsList" aria-live="polite">
+          <p class="comment-message">Loading table talk…</p>
+        </div>
+      </section>
     </section>
 
     <section class="rules" aria-label="How to play">
@@ -146,5 +176,6 @@
   </main>
 
   <script src="script.js"></script>
+  <script src="social.js"></script>
 </body>
 </html>

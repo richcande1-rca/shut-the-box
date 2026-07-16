@@ -1,0 +1,8 @@
+name = "shut-the-box-api"
+main = "worker.js"
+compatibility_date = "2026-07-16"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "YOUR_EXISTING_DATABASE_NAME"
+database_id = "YOUR_EXISTING_DATABASE_ID"
