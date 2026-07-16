@@ -1,4 +1,4 @@
-/* Daily challenge and standings shell. */
+/* Daily challenge and live leaderboard. */
 
 .mode-controls {
   display: flex;
@@ -39,7 +39,8 @@
 }
 
 .daily-banner span,
-.daily-board-heading span {
+.daily-board-heading span,
+.score-submit label {
   color: rgba(229, 194, 118, 0.68);
   font-family: Arial, Helvetica, sans-serif;
   font-size: 0.58rem;
@@ -145,6 +146,11 @@ body[data-mode="practice"] .challenge-status {
   background: rgba(255,255,255,0.018);
 }
 
+.your-score-row {
+  border-bottom: 1px solid rgba(224, 190, 112, 0.12);
+  background: rgba(211, 159, 71, 0.07);
+}
+
 .rank-cell {
   color: rgba(239, 219, 177, 0.42);
   font-family: Arial, Helvetica, sans-serif;
@@ -155,7 +161,7 @@ body[data-mode="practice"] .challenge-status {
   color: #f0d59c;
   font-family: Arial, Helvetica, sans-serif;
   font-size: 0.78rem;
-  letter-spacing: 0.14em;
+  letter-spacing: 0.11em;
 }
 
 .score-cell {
@@ -164,6 +170,110 @@ body[data-mode="practice"] .challenge-status {
   font-size: 1.65rem;
   font-weight: 700;
   font-variant-numeric: tabular-nums;
+}
+
+.score-submit {
+  display: grid;
+  gap: 8px;
+  padding: 14px 16px 8px;
+  border-bottom: 1px solid rgba(224, 190, 112, 0.08);
+}
+
+.score-submit[hidden] {
+  display: none;
+}
+
+.score-submit > div {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+}
+
+.score-submit input {
+  min-width: 0;
+  min-height: 42px;
+  padding: 0 12px;
+  border: 1px solid rgba(224, 190, 112, 0.28);
+  border-radius: 7px;
+  background: rgba(8, 4, 3, 0.58);
+  color: #f3dfb4;
+  font: 700 0.94rem Arial, Helvetica, sans-serif;
+  outline: none;
+}
+
+.score-submit input:focus {
+  border-color: #e0bd6b;
+  box-shadow: 0 0 0 3px rgba(224, 189, 107, 0.1);
+}
+
+.submit-score-button {
+  min-width: 112px;
+}
+
+.submission-status {
+  min-height: 0;
+  margin: 0;
+  padding: 7px 16px;
+  color: rgba(239, 219, 177, 0.62);
+  font-size: 0.78rem;
+}
+
+.submission-status:empty {
+  display: none;
+}
+
+.leaderboard-columns {
+  display: grid;
+  grid-template-columns: 52px 1fr 70px;
+  padding: 9px 16px 7px;
+  border-top: 1px solid rgba(224, 190, 112, 0.08);
+  border-bottom: 1px solid rgba(224, 190, 112, 0.08);
+  color: rgba(229, 194, 118, 0.46);
+  font-family: Arial, Helvetica, sans-serif;
+  font-size: 0.55rem;
+  font-weight: 900;
+  letter-spacing: 0.15em;
+}
+
+.leaderboard-columns span:last-child {
+  justify-self: end;
+}
+
+.leaderboard-rows {
+  max-height: 430px;
+  overflow-y: auto;
+}
+
+.leaderboard-row + .leaderboard-row {
+  border-top: 1px solid rgba(224, 190, 112, 0.07);
+}
+
+.leaderboard-row.is-player {
+  background: rgba(61, 130, 77, 0.13);
+}
+
+.you-badge {
+  display: inline-block;
+  margin-left: 5px;
+  padding: 2px 5px;
+  border: 1px solid rgba(126, 191, 142, 0.34);
+  border-radius: 999px;
+  color: #cfead6;
+  font-size: 0.48rem;
+  letter-spacing: 0.1em;
+  vertical-align: 1px;
+}
+
+.leaderboard-message {
+  margin: 0;
+  padding: 20px 16px;
+  color: rgba(239, 219, 177, 0.58);
+  font-size: 0.82rem;
+  text-align: center;
+}
+
+.leaderboard-message.error {
+  color: #e9bb9b;
 }
 
 .daily-board-note {
@@ -222,5 +332,19 @@ body[data-mode="practice"] .challenge-status {
 
   .daily-board-heading {
     align-items: flex-end;
+  }
+
+  .daily-board-row,
+  .leaderboard-columns {
+    grid-template-columns: 40px 1fr 58px;
+    padding-inline: 12px;
+  }
+
+  .score-submit > div {
+    grid-template-columns: 1fr;
+  }
+
+  .submit-score-button {
+    width: 100%;
   }
 }
