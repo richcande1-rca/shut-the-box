@@ -177,10 +177,10 @@ async function getLeaderboard(url, env) {
   if (!validDateKey(date)) return json({ error: "Invalid challenge date." }, 400);
 
   const { results = [] } = await env.DB.prepare(`
-    SELECT player_name, score, created_at
-    FROM scores
+    SELECT player_name, score, rolls_used, created_at
+    FROM daily_scores
     WHERE challenge_date = ?
-    ORDER BY score ASC, created_at ASC
+    ORDER BY score ASC, rolls_used ASC, created_at ASC
     LIMIT 100
   `).bind(date).all();
 
@@ -193,7 +193,8 @@ async function getLeaderboard(url, env) {
     return {
       rank: displayedRank,
       name: entry.player_name,
-      score
+      score,
+      rolls_used: Number(entry.rolls_used)
     };
   });
 
@@ -220,8 +221,8 @@ async function postScore(request, env) {
   if (!playerName) return json({ error: "Use a name from 1 to 20 characters." }, 400);
 
   const existing = await env.DB.prepare(`
-    SELECT player_name, score
-    FROM scores
+    SELECT player_name, score, rolls_used
+    FROM daily_scores
     WHERE challenge_date = ? AND player_id = ?
   `).bind(challengeDate, playerId).first();
 
@@ -229,7 +230,8 @@ async function postScore(request, env) {
     return json({
       already_submitted: true,
       player_name: existing.player_name,
-      score: Number(existing.score)
+      score: Number(existing.score),
+      rolls_used: Number(existing.rolls_used)
     });
   }
 
@@ -241,9 +243,24 @@ async function postScore(request, env) {
   }
 
   await env.DB.prepare(`
-    INSERT INTO scores (challenge_date, player_id, player_name, score, created_at)
-    VALUES (?, ?, ?, ?, datetime('now'))
-  `).bind(challengeDate, playerId, playerName, verified.score).run();
+    INSERT INTO daily_scores (
+      challenge_date,
+      player_id,
+      player_name,
+      score,
+      rolls_used,
+      moves,
+      created_at
+    )
+    VALUES (?, ?, ?, ?, ?, ?, datetime('now'))
+  `).bind(
+    challengeDate,
+    playerId,
+    playerName,
+    verified.score,
+    verified.rollsUsed,
+    JSON.stringify(body.moves)
+  ).run();
 
   return json({
     already_submitted: false,
@@ -291,7 +308,7 @@ async function postComment(request, env) {
 
   const score = await env.DB.prepare(`
     SELECT player_name
-    FROM scores
+    FROM daily_scores
     WHERE challenge_date = ? AND player_id = ?
   `).bind(challengeDate, playerId).first();
 
