@@ -1,0 +1,239 @@
+/* Daily winner badges and table-talk comments. */
+
+.previous-winner {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  padding: 11px 16px;
+  border-bottom: 1px solid rgba(224, 190, 112, 0.12);
+  background: linear-gradient(90deg, rgba(121, 81, 24, 0.2), rgba(255,255,255,0.018));
+}
+
+.previous-winner[hidden] {
+  display: none;
+}
+
+.previous-winner > span:first-child,
+.table-talk-heading span {
+  color: rgba(229, 194, 118, 0.66);
+  font-family: Arial, Helvetica, sans-serif;
+  font-size: 0.55rem;
+  font-weight: 900;
+  letter-spacing: 0.18em;
+}
+
+.previous-winner strong {
+  min-width: 0;
+  overflow: hidden;
+  color: #f3dfb4;
+  font-family: Arial, Helvetica, sans-serif;
+  font-size: 0.82rem;
+  letter-spacing: 0.08em;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.previous-winner-score {
+  color: rgba(239, 219, 177, 0.62);
+  font-size: 0.78rem;
+  white-space: nowrap;
+}
+
+.previous-winner-score strong {
+  margin-left: 4px;
+  font-size: 1.2rem;
+  letter-spacing: 0;
+}
+
+.leader-badge,
+.winner-badge {
+  display: inline-block;
+  margin-left: 7px;
+  padding: 2px 6px;
+  border: 1px solid rgba(224, 190, 112, 0.38);
+  border-radius: 999px;
+  color: #ffe2a3;
+  background: rgba(155, 100, 26, 0.22);
+  font-size: 0.46rem;
+  font-weight: 900;
+  letter-spacing: 0.11em;
+  vertical-align: 1px;
+}
+
+.winner-badge {
+  color: #fff0bf;
+  border-color: rgba(242, 200, 96, 0.54);
+  background: rgba(169, 107, 21, 0.3);
+  box-shadow: 0 0 12px rgba(224, 176, 65, 0.1);
+}
+
+.table-talk {
+  border-top: 1px solid rgba(224, 190, 112, 0.14);
+  background: rgba(7, 3, 2, 0.18);
+}
+
+.table-talk-heading {
+  display: flex;
+  align-items: end;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 15px 16px 11px;
+}
+
+.table-talk-heading div {
+  display: grid;
+  gap: 3px;
+}
+
+.table-talk-heading strong {
+  color: #ead2a0;
+  font-size: 1rem;
+}
+
+.table-talk-heading p {
+  margin: 0;
+  color: rgba(239, 219, 177, 0.48);
+  font-size: 0.74rem;
+}
+
+.comment-form {
+  display: grid;
+  gap: 8px;
+  padding: 0 16px 14px;
+}
+
+.comment-form[hidden],
+.comment-gate[hidden] {
+  display: none;
+}
+
+.comment-form textarea {
+  width: 100%;
+  min-height: 70px;
+  resize: vertical;
+  box-sizing: border-box;
+  padding: 10px 12px;
+  border: 1px solid rgba(224, 190, 112, 0.26);
+  border-radius: 8px;
+  background: rgba(8, 4, 3, 0.58);
+  color: #f3dfb4;
+  font: 700 0.9rem/1.4 Arial, Helvetica, sans-serif;
+  outline: none;
+}
+
+.comment-form textarea:focus {
+  border-color: #e0bd6b;
+  box-shadow: 0 0 0 3px rgba(224, 189, 107, 0.1);
+}
+
+.comment-form-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.comment-count {
+  color: rgba(239, 219, 177, 0.46);
+  font: 700 0.7rem Arial, Helvetica, sans-serif;
+}
+
+.comment-gate,
+.comment-status {
+  margin: 0;
+  padding: 0 16px 13px;
+  color: rgba(239, 219, 177, 0.56);
+  font-size: 0.78rem;
+  line-height: 1.4;
+}
+
+.comment-status:empty {
+  display: none;
+}
+
+.comments-list {
+  border-top: 1px solid rgba(224, 190, 112, 0.08);
+}
+
+.comment-card {
+  display: grid;
+  gap: 5px;
+  padding: 13px 16px;
+}
+
+.comment-card + .comment-card {
+  border-top: 1px solid rgba(224, 190, 112, 0.07);
+}
+
+.comment-card.is-player {
+  background: rgba(61, 130, 77, 0.09);
+}
+
+.comment-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.comment-card-name {
+  color: #f0d59c;
+  font: 900 0.72rem Arial, Helvetica, sans-serif;
+  letter-spacing: 0.1em;
+}
+
+.comment-card-time {
+  color: rgba(239, 219, 177, 0.38);
+  font: 700 0.66rem Arial, Helvetica, sans-serif;
+  white-space: nowrap;
+}
+
+.comment-card-body {
+  margin: 0;
+  color: rgba(247, 229, 193, 0.78);
+  font-size: 0.86rem;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+
+.comment-message {
+  margin: 0;
+  padding: 18px 16px;
+  color: rgba(239, 219, 177, 0.52);
+  font-size: 0.8rem;
+  text-align: center;
+}
+
+.comment-message.error {
+  color: #e9bb9b;
+}
+
+body[data-mode="practice"] .table-talk {
+  opacity: 0.48;
+  pointer-events: none;
+}
+
+@media (max-width: 520px) {
+  .previous-winner {
+    grid-template-columns: 1fr auto;
+  }
+
+  .previous-winner > span:first-child {
+    grid-column: 1 / -1;
+  }
+
+  .table-talk-heading {
+    align-items: start;
+    flex-direction: column;
+  }
+
+  .comment-form-footer {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .comment-form-footer .small-button {
+    width: 100%;
+  }
+}
