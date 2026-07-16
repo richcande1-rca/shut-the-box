@@ -3,6 +3,7 @@
 const TILE_VALUES = [1, 2, 3, 4, 5, 6, 7, 8, 9];
 const BEST_SCORE_KEY = "shut-the-box-best-score-v1";
 const DAILY_STATE_PREFIX = "shut-the-box-daily-v1:";
+const CHALLENGE_TIME_ZONE = "America/Chicago";
 
 const tileElements = [...document.querySelectorAll(".number-tile")];
 const dieOne = document.querySelector("#dieOne");
@@ -43,15 +44,22 @@ let attemptStarted = false;
 let dailyScore = null;
 let pendingDice = null;
 
-function utcDateKey(date = new Date()) {
-  return date.toISOString().slice(0, 10);
+function challengeDateKey(date = new Date()) {
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone: CHALLENGE_TIME_ZONE,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit"
+  }).formatToParts(date);
+  const values = Object.fromEntries(parts.map((part) => [part.type, part.value]));
+  return `${values.year}-${values.month}-${values.day}`;
 }
 
-const challengeDate = utcDateKey();
+const challengeDate = challengeDateKey();
 const dailyStorageKey = `${DAILY_STATE_PREFIX}${challengeDate}`;
 
 function formatChallengeDate(dateKey) {
-  const date = new Date(`${dateKey}T00:00:00Z`);
+  const date = new Date(`${dateKey}T12:00:00Z`);
   return new Intl.DateTimeFormat(undefined, {
     month: "short",
     day: "numeric",
