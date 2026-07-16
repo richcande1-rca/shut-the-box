@@ -3,7 +3,10 @@
 const TILE_VALUES = [1, 2, 3, 4, 5, 6, 7, 8, 9];
 const BEST_SCORE_KEY = "shut-the-box-best-score-v1";
 const DAILY_STATE_PREFIX = "shut-the-box-daily-v1:";
+const PLAYER_ID_KEY = "shut-the-box-player-id-v1";
+const PLAYER_NAME_KEY = "shut-the-box-player-name-v1";
 const CHALLENGE_TIME_ZONE = "America/Chicago";
+const API_BASE = "https://shut-the-box-api.rich-gothic.workers.dev";
 
 const tileElements = [...document.querySelectorAll(".number-tile")];
 const dieOne = document.querySelector("#dieOne");
@@ -29,6 +32,13 @@ const challengeDateElement = document.querySelector("#challengeDate");
 const challengeStatusElement = document.querySelector("#challengeStatus");
 const challengeScoreElement = document.querySelector("#challengeScore");
 const challengeRollElement = document.querySelector("#challengeRoll");
+const challengeRankElement = document.querySelector("#challengeRank");
+const challengeNameElement = document.querySelector("#challengeName");
+const scoreForm = document.querySelector("#scoreForm");
+const playerNameInput = document.querySelector("#playerName");
+const submitScoreButton = document.querySelector("#submitScoreButton");
+const submissionStatusElement = document.querySelector("#submissionStatus");
+const leaderboardRowsElement = document.querySelector("#leaderboardRows");
 
 let openTiles = new Set(TILE_VALUES);
 let selectedTiles = new Set();
@@ -43,6 +53,11 @@ let lastDice = [1, 1];
 let attemptStarted = false;
 let dailyScore = null;
 let pendingDice = null;
+let moveHistory = [];
+let dailySubmitted = false;
+let playerName = readPlayerName();
+let leaderboard = [];
+let leaderboardLoading = false;
 
 function challengeDateKey(date = new Date()) {
   const parts = new Intl.DateTimeFormat("en-US", {
@@ -134,6 +149,39 @@ function saveBestScore(score) {
   }
 }
 
+function readPlayerName() {
+  try {
+    return localStorage.getItem(PLAYER_NAME_KEY) ?? "";
+  } catch {
+    return "";
+  }
+}
+
+function savePlayerName(name) {
+  playerName = name;
+  try {
+    localStorage.setItem(PLAYER_NAME_KEY, name);
+  } catch {
+    // A name can still be used for the current submission.
+  }
+}
+
+function getPlayerId() {
+  try {
+    const existing = localStorage.getItem(PLAYER_ID_KEY);
+    if (existing && /^[A-Za-z0-9_-]{16,80}$/.test(existing)) return existing;
+
+    const generated = globalThis.crypto?.randomUUID
+      ? globalThis.crypto.randomUUID()
+      : `player_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 18)}`;
+
+    localStorage.setItem(PLAYER_ID_KEY, generated);
+    return generated;
+  } catch {
+    return `player_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 18)}`;
+  }
+}
+
 function readDailyState() {
   try {
     const raw = localStorage.getItem(dailyStorageKey);
@@ -158,7 +206,10 @@ function writeDailyState() {
     attemptStarted,
     roundOver,
     score: dailyScore,
-    pendingDice
+    pendingDice,
+    moves: moveHistory,
+    submitted: dailySubmitted,
+    playerName
   };
 
   try {
@@ -190,6 +241,56 @@ function hasCombination(values, target) {
   return search(0, target);
 }
 
+function matchingSubsets(values, target) {
+  const matches = [];
+
+  function search(index, chosen, total) {
+    if (total === target) {
+      matches.push([...chosen]);
+      return;
+    }
+    if (total > target || index >= values.length) return;
+
+    chosen.push(values[index]);
+    search(index + 1, chosen, total + values[index]);
+    chosen.pop();
+    search(index + 1, chosen, total);
+  }
+
+  search(0, [], 0);
+  return matches.filter((match) => match.length > 0);
+}
+
+function reconstructLegacyMoves(state, restoredOpenTiles) {
+  const closedTiles = TILE_VALUES.filter((tile) => !restoredOpenTiles.has(tile));
+  if (closedTiles.length === 0) return [];
+
+  let successfulRolls = Number.isInteger(state.rollIndex) ? state.rollIndex : 0;
+  const restoredScore = sum(restoredOpenTiles);
+  const hasUnplayedCurrentRoll = Number.isFinite(state.currentRoll) || Array.isArray(state.pendingDice);
+
+  if (state.roundOver && restoredScore !== 0) successfulRolls -= 1;
+  else if (!state.roundOver && hasUnplayedCurrentRoll) successfulRolls -= 1;
+
+  successfulRolls = Math.max(0, successfulRolls);
+  const targets = Array.from({ length: successfulRolls }, (_, index) => sum(dailyDiceAt(index)));
+
+  function search(roll, remainingTiles) {
+    if (roll === targets.length) return remainingTiles.length === 0 ? [] : null;
+
+    for (const move of matchingSubsets(remainingTiles, targets[roll])) {
+      const moveSet = new Set(move);
+      const rest = remainingTiles.filter((tile) => !moveSet.has(tile));
+      const following = search(roll + 1, rest);
+      if (following) return [move, ...following];
+    }
+
+    return null;
+  }
+
+  return search(0, closedTiles) ?? [];
+}
+
 function setInstruction(text) {
   instructionElement.textContent = text;
 }
@@ -211,19 +312,32 @@ function showRoundResult(title, score, detail) {
 function updateChallengePanel() {
   challengeDateElement.textContent = formatChallengeDate(challengeDate);
   challengeRollElement.textContent = String(rollIndex);
+  challengeScoreElement.textContent = dailyScore === null ? "—" : String(dailyScore);
+  challengeNameElement.textContent = dailySubmitted && playerName ? playerName : "YOU";
 
   if (dailyScore !== null) {
-    challengeStatusElement.textContent = "COMPLETE";
+    challengeStatusElement.textContent = dailySubmitted ? "POSTED" : "COMPLETE";
     challengeStatusElement.dataset.state = "complete";
-    challengeScoreElement.textContent = String(dailyScore);
   } else if (attemptStarted) {
     challengeStatusElement.textContent = "IN PROGRESS";
     challengeStatusElement.dataset.state = "progress";
-    challengeScoreElement.textContent = "—";
   } else {
     challengeStatusElement.textContent = "READY";
     challengeStatusElement.dataset.state = "ready";
-    challengeScoreElement.textContent = "—";
+  }
+}
+
+function updateSubmissionPanel() {
+  const canSubmit = mode === "daily" && roundOver && dailyScore !== null && !dailySubmitted;
+  scoreForm.hidden = !canSubmit;
+
+  if (canSubmit) {
+    if (!playerNameInput.value && playerName) playerNameInput.value = playerName;
+    submissionStatusElement.textContent = "Your score is locked. Add a name to post it.";
+  } else if (mode === "daily" && dailySubmitted) {
+    submissionStatusElement.textContent = `Posted as ${playerName}.`;
+  } else {
+    submissionStatusElement.textContent = "";
   }
 }
 
@@ -265,6 +379,7 @@ function updateDisplay() {
   shutButton.disabled = rolling || roundOver || currentRoll === null || selectedTotal !== currentRoll;
   updateModeDisplay();
   updateChallengePanel();
+  updateSubmissionPanel();
 }
 
 function finishRound(detail, title = "ROUND OVER") {
@@ -347,7 +462,6 @@ function rollDice() {
     setDieFace(dieOne, randomDie(), "First die");
     setDieFace(dieTwo, randomDie(), "Second die");
     shuffleCount += 1;
-
     if (shuffleCount >= 7) window.clearInterval(shuffle);
   }, 75);
 
@@ -378,7 +492,9 @@ function toggleTile(value) {
 function shutSelected() {
   if (currentRoll === null || sum(selectedTiles) !== currentRoll || roundOver) return;
 
+  const completedMove = [...selectedTiles].sort((a, b) => a - b);
   selectedTiles.forEach((value) => openTiles.delete(value));
+  if (mode === "daily") moveHistory.push(completedMove);
   selectedTiles.clear();
   currentRoll = null;
   rollTotalElement.textContent = "—";
@@ -407,6 +523,8 @@ function resetBoard() {
   attemptStarted = false;
   dailyScore = null;
   pendingDice = null;
+  moveHistory = [];
+  dailySubmitted = false;
 
   dieOne.classList.remove("rolling");
   dieTwo.classList.remove("rolling");
@@ -435,6 +553,11 @@ function restoreDailyState() {
   roundOver = Boolean(state.roundOver);
   dailyScore = Number.isFinite(state.score) ? state.score : null;
   pendingDice = Array.isArray(state.pendingDice) ? state.pendingDice : null;
+  moveHistory = Array.isArray(state.moves)
+    ? state.moves.map((move) => [...move])
+    : reconstructLegacyMoves(state, openTiles);
+  dailySubmitted = Boolean(state.submitted);
+  playerName = typeof state.playerName === "string" && state.playerName ? state.playerName : readPlayerName();
 
   if (!roundOver && pendingDice) {
     lastDice = pendingDice;
@@ -448,11 +571,11 @@ function restoreDailyState() {
   rollTotalElement.textContent = currentRoll === null ? "—" : String(currentRoll);
 
   if (roundOver && dailyScore !== null) {
-    setInstruction("Daily run complete.");
+    setInstruction(dailySubmitted ? "Daily score posted." : "Daily run complete.");
     showRoundResult(
       dailyScore === 0 ? "SHUT THE BOX" : "ROUND OVER",
       dailyScore,
-      "Your official score is saved for today."
+      dailySubmitted ? "Your verified score is on today’s board." : "Your official score is saved for today."
     );
   } else if (currentRoll !== null) {
     setInstruction(`Choose open tiles totaling ${currentRoll}.`);
@@ -475,6 +598,141 @@ function startPractice() {
 function startDaily() {
   mode = "daily";
   restoreDailyState();
+  loadLeaderboard();
+}
+
+function createLeaderboardRow(entry) {
+  const row = document.createElement("div");
+  row.className = "daily-board-row leaderboard-row";
+
+  const isPlayer = dailySubmitted
+    && entry.name === playerName
+    && Number(entry.score) === dailyScore;
+  if (isPlayer) row.classList.add("is-player");
+
+  const rank = document.createElement("span");
+  rank.className = "rank-cell";
+  rank.textContent = String(entry.rank);
+
+  const name = document.createElement("strong");
+  name.className = "name-cell";
+  name.textContent = entry.name;
+  if (isPlayer) {
+    const badge = document.createElement("span");
+    badge.className = "you-badge";
+    badge.textContent = "YOU";
+    name.append(" ", badge);
+  }
+
+  const score = document.createElement("span");
+  score.className = "score-cell";
+  score.textContent = String(entry.score);
+
+  row.append(rank, name, score);
+  return row;
+}
+
+function renderLeaderboard() {
+  leaderboardRowsElement.replaceChildren();
+  challengeRankElement.textContent = "—";
+
+  if (leaderboardLoading) {
+    const message = document.createElement("p");
+    message.className = "leaderboard-message";
+    message.textContent = "Loading today’s board…";
+    leaderboardRowsElement.append(message);
+    return;
+  }
+
+  if (leaderboard.length === 0) {
+    const message = document.createElement("p");
+    message.className = "leaderboard-message";
+    message.textContent = "No posted scores yet. First name on the board gets the top line.";
+    leaderboardRowsElement.append(message);
+    return;
+  }
+
+  let matchedPlayer = false;
+  leaderboard.forEach((entry) => {
+    leaderboardRowsElement.append(createLeaderboardRow(entry));
+    if (!matchedPlayer && dailySubmitted && entry.name === playerName && Number(entry.score) === dailyScore) {
+      matchedPlayer = true;
+      challengeRankElement.textContent = String(entry.rank);
+    }
+  });
+}
+
+async function loadLeaderboard() {
+  leaderboardLoading = true;
+  renderLeaderboard();
+
+  try {
+    const response = await fetch(`${API_BASE}/leaderboard?date=${encodeURIComponent(challengeDate)}`);
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.error || "Leaderboard request failed.");
+    leaderboard = Array.isArray(data.leaderboard) ? data.leaderboard : [];
+  } catch {
+    leaderboard = [];
+    leaderboardRowsElement.replaceChildren();
+    const message = document.createElement("p");
+    message.className = "leaderboard-message error";
+    message.textContent = "Today’s board could not be reached. Your game still works.";
+    leaderboardRowsElement.append(message);
+    leaderboardLoading = false;
+    return;
+  }
+
+  leaderboardLoading = false;
+  renderLeaderboard();
+}
+
+function cleanPlayerName(value) {
+  return value.trim().replace(/\s+/g, " ");
+}
+
+async function submitDailyScore(event) {
+  event.preventDefault();
+  if (mode !== "daily" || !roundOver || dailyScore === null || dailySubmitted) return;
+
+  const name = cleanPlayerName(playerNameInput.value);
+  if (name.length < 1 || name.length > 20) {
+    submissionStatusElement.textContent = "Use a name from 1 to 20 characters.";
+    playerNameInput.focus();
+    return;
+  }
+
+  submitScoreButton.disabled = true;
+  submissionStatusElement.textContent = "Checking the run…";
+
+  try {
+    const response = await fetch(`${API_BASE}/scores`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        challenge_date: challengeDate,
+        player_id: getPlayerId(),
+        player_name: name,
+        moves: moveHistory
+      })
+    });
+
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.error || "Score submission failed.");
+
+    savePlayerName(data.player_name || name);
+    dailyScore = Number(data.score);
+    dailySubmitted = true;
+    writeDailyState();
+    updateDisplay();
+    submissionStatusElement.textContent = data.already_submitted
+      ? `Today’s score was already posted as ${playerName}.`
+      : `Score posted as ${playerName}.`;
+    await loadLeaderboard();
+  } catch (error) {
+    submissionStatusElement.textContent = error.message || "Could not post the score.";
+  } finally {
+    submitScoreButton.disabled = false;
+  }
 }
 
 tileElements.forEach((tile) => {
@@ -486,7 +744,9 @@ shutButton.addEventListener("click", shutSelected);
 dailyModeButton.addEventListener("click", startDaily);
 practiceModeButton.addEventListener("click", startPractice);
 playAgainButton.addEventListener("click", startPractice);
+scoreForm.addEventListener("submit", submitDailyScore);
 
 buildDie(dieOne);
 buildDie(dieTwo);
+if (playerName) playerNameInput.value = playerName;
 startDaily();
