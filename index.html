@@ -10,7 +10,7 @@
   <link rel="stylesheet" href="round.css" />
   <link rel="stylesheet" href="cube-dice.css" />
   <link rel="stylesheet" href="daily.css" />
-  <link rel="stylesheet" href="social.css" />
+  <link rel="stylesheet" href="social-v2.css?v=20260716e" />
 </head>
 <body data-mode="daily">
   <div class="room-glow" aria-hidden="true"></div>
@@ -32,7 +32,7 @@
         <span>DAILY CHALLENGE</span>
         <strong id="challengeDate">—</strong>
       </div>
-      <p>Same dice. One official run.</p>
+      <p>Same dice. Three official attempts.</p>
       <strong class="challenge-status" id="challengeStatus" data-state="ready">READY</strong>
     </section>
 
@@ -62,7 +62,7 @@
               <strong id="openTotal">45</strong>
             </div>
             <div>
-              <span id="bestLabel">TODAY</span>
+              <span id="bestLabel">TODAY’S BEST</span>
               <strong id="bestScore">—</strong>
             </div>
           </div>
@@ -111,7 +111,7 @@
           <span>TODAY’S BOARD</span>
           <strong>Lowest score leads</strong>
         </div>
-        <p>Rolls used: <strong id="challengeRoll">0</strong></p>
+        <p>Attempt: <strong id="challengeAttempt">1 / 3</strong> · Rolls: <strong id="challengeRoll">0</strong></p>
       </div>
 
       <div class="previous-winner" id="previousWinner" hidden>
@@ -127,7 +127,7 @@
       </div>
 
       <form class="score-submit" id="scoreForm" hidden>
-        <label for="playerName">PUT TODAY’S SCORE ON THE BOARD</label>
+        <label for="playerName">POST THIS ATTEMPT</label>
         <div>
           <input id="playerName" name="playerName" type="text" maxlength="20" autocomplete="nickname" placeholder="Your name" required />
           <button class="small-button submit-score-button" id="submitScoreButton" type="submit">POST SCORE</button>
@@ -143,7 +143,7 @@
       <div class="leaderboard-rows" id="leaderboardRows" aria-live="polite">
         <p class="leaderboard-message">Loading today’s board…</p>
       </div>
-      <p class="daily-board-note">Scores are checked against today’s exact dice sequence before they appear.</p>
+      <p class="daily-board-note">Each player gets three verified attempts. Only the best score stays on the board.</p>
 
       <section class="table-talk" aria-labelledby="tableTalkTitle">
         <div class="table-talk-heading">
@@ -151,17 +151,18 @@
             <span>TABLE TALK</span>
             <strong id="tableTalkTitle">Today’s comments</strong>
           </div>
-          <p>One short comment per player.</p>
+          <p>Five comments per player each day.</p>
         </div>
 
-        <form class="comment-form" id="commentForm" hidden>
+        <form class="comment-form" id="commentForm">
+          <input id="commentName" name="commentName" type="text" maxlength="20" autocomplete="nickname" placeholder="Your name" required />
           <textarea id="commentInput" name="comment" maxlength="180" placeholder="That last roll killed me…" required></textarea>
           <div class="comment-form-footer">
             <span class="comment-count" id="commentCount">0 / 180</span>
-            <button class="small-button" id="commentButton" type="submit">POST COMMENT</button>
+            <button class="small-button" id="commentButton" type="submit">POST COMMENT · 5 LEFT</button>
           </div>
         </form>
-        <p class="comment-gate" id="commentGate">Post today’s score to join the table talk.</p>
+        <p class="comment-gate" id="commentGate" hidden></p>
         <p class="comment-status" id="commentStatus" aria-live="polite"></p>
         <div class="comments-list" id="commentsList" aria-live="polite">
           <p class="comment-message">Loading table talk…</p>
@@ -171,11 +172,11 @@
 
     <section class="rules" aria-label="How to play">
       <strong>LOWEST SCORE WINS THE DAY.</strong>
-      <p>Everyone receives the same daily dice sequence. Shut tiles that total each roll. When no move remains, the sum left open is your official score.</p>
+      <p>Everyone receives the same daily dice sequence for three attempts. Shut tiles that total each roll. Your best verified score is the one that stays on the board.</p>
     </section>
   </main>
 
-  <script src="script.js"></script>
-  <script src="social.js?v=20260716d"></script>
+  <script src="script-v2.js?v=20260716e"></script>
+  <script src="social-v2.js?v=20260716e"></script>
 </body>
 </html>
