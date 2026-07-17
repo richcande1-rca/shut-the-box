@@ -1,6 +1,8 @@
 const TILE_VALUES = [1, 2, 3, 4, 5, 6, 7, 8, 9];
 const CHALLENGE_TIME_ZONE = "America/Chicago";
-const COMMENT_LIMIT = 180;
+const DAILY_ATTEMPT_LIMIT = 3;
+const COMMENT_CHARACTER_LIMIT = 180;
+const DAILY_COMMENT_LIMIT = 5;
 
 const CORS_HEADERS = {
   "Access-Control-Allow-Origin": "*",
@@ -169,7 +171,7 @@ function cleanPlayerName(value) {
 
 function cleanComment(value) {
   const cleaned = String(value || "").trim().replace(/\s+/g, " ");
-  return cleaned.length >= 1 && cleaned.length <= COMMENT_LIMIT ? cleaned : "";
+  return cleaned.length >= 1 && cleaned.length <= COMMENT_CHARACTER_LIMIT ? cleaned : "";
 }
 
 async function getLeaderboard(url, env) {
@@ -220,19 +222,26 @@ async function postScore(request, env) {
   if (!playerId) return json({ error: "Invalid player ID." }, 400);
   if (!playerName) return json({ error: "Use a name from 1 to 20 characters." }, 400);
 
-  const existing = await env.DB.prepare(`
-    SELECT player_name, score, rolls_used
-    FROM daily_scores
+  const attemptCount = await env.DB.prepare(`
+    SELECT COUNT(*) AS attempts_used
+    FROM daily_attempts
     WHERE challenge_date = ? AND player_id = ?
   `).bind(challengeDate, playerId).first();
 
-  if (existing) {
+  const attemptsUsed = Number(attemptCount?.attempts_used || 0);
+  if (attemptsUsed >= DAILY_ATTEMPT_LIMIT) {
+    const best = await env.DB.prepare(`
+      SELECT player_name, score, rolls_used
+      FROM daily_scores
+      WHERE challenge_date = ? AND player_id = ?
+    `).bind(challengeDate, playerId).first();
+
     return json({
-      already_submitted: true,
-      player_name: existing.player_name,
-      score: Number(existing.score),
-      rolls_used: Number(existing.rolls_used)
-    });
+      error: `All ${DAILY_ATTEMPT_LIMIT} daily attempts have already been used.`,
+      attempts_used: attemptsUsed,
+      best_score: best ? Number(best.score) : null,
+      best_rolls_used: best ? Number(best.rolls_used) : null
+    }, 429);
   }
 
   let verified;
@@ -242,31 +251,95 @@ async function postScore(request, env) {
     return json({ error: error.message || "The run could not be verified." }, 400);
   }
 
+  const attemptNumber = attemptsUsed + 1;
+  const serializedMoves = JSON.stringify(body.moves);
+
   await env.DB.prepare(`
-    INSERT INTO daily_scores (
+    INSERT INTO daily_attempts (
       challenge_date,
       player_id,
       player_name,
+      attempt_number,
       score,
       rolls_used,
       moves,
       created_at
     )
-    VALUES (?, ?, ?, ?, ?, ?, datetime('now'))
+    VALUES (?, ?, ?, ?, ?, ?, ?, datetime('now'))
   `).bind(
     challengeDate,
     playerId,
     playerName,
+    attemptNumber,
     verified.score,
     verified.rollsUsed,
-    JSON.stringify(body.moves)
+    serializedMoves
   ).run();
 
+  const existing = await env.DB.prepare(`
+    SELECT player_name, score, rolls_used
+    FROM daily_scores
+    WHERE challenge_date = ? AND player_id = ?
+  `).bind(challengeDate, playerId).first();
+
+  const improved = !existing
+    || verified.score < Number(existing.score)
+    || (verified.score === Number(existing.score) && verified.rollsUsed < Number(existing.rolls_used));
+
+  if (!existing) {
+    await env.DB.prepare(`
+      INSERT INTO daily_scores (
+        challenge_date,
+        player_id,
+        player_name,
+        score,
+        rolls_used,
+        moves,
+        created_at
+      )
+      VALUES (?, ?, ?, ?, ?, ?, datetime('now'))
+    `).bind(
+      challengeDate,
+      playerId,
+      playerName,
+      verified.score,
+      verified.rollsUsed,
+      serializedMoves
+    ).run();
+  } else if (improved) {
+    await env.DB.prepare(`
+      UPDATE daily_scores
+      SET player_name = ?, score = ?, rolls_used = ?, moves = ?, created_at = datetime('now')
+      WHERE challenge_date = ? AND player_id = ?
+    `).bind(
+      playerName,
+      verified.score,
+      verified.rollsUsed,
+      serializedMoves,
+      challengeDate,
+      playerId
+    ).run();
+  } else if (existing.player_name !== playerName) {
+    await env.DB.prepare(`
+      UPDATE daily_scores
+      SET player_name = ?
+      WHERE challenge_date = ? AND player_id = ?
+    `).bind(playerName, challengeDate, playerId).run();
+  }
+
+  const best = improved || !existing
+    ? { score: verified.score, rolls_used: verified.rollsUsed }
+    : existing;
+
   return json({
-    already_submitted: false,
     player_name: playerName,
     score: verified.score,
-    rolls_used: verified.rollsUsed
+    rolls_used: verified.rollsUsed,
+    attempt_number: attemptNumber,
+    attempts_remaining: DAILY_ATTEMPT_LIMIT - attemptNumber,
+    best_score: Number(best.score),
+    best_rolls_used: Number(best.rolls_used),
+    improved
   }, 201);
 }
 
@@ -276,65 +349,77 @@ async function getComments(url, env) {
   if (!validDateKey(date)) return json({ error: "Invalid challenge date." }, 400);
 
   const { results = [] } = await env.DB.prepare(`
-    SELECT player_id, player_name, body, created_at, updated_at
+    SELECT player_id, player_name, body, created_at
     FROM comments
     WHERE challenge_date = ?
-    ORDER BY created_at ASC
-    LIMIT 100
+    ORDER BY created_at ASC, id ASC
+    LIMIT 200
   `).bind(date).all();
 
-  const comments = results.map((comment) => ({
-    name: comment.player_name,
-    body: comment.body,
-    created_at: comment.updated_at || comment.created_at,
-    is_owner: Boolean(viewerId && viewerId === comment.player_id)
-  }));
+  let used = 0;
+  const comments = results.map((comment) => {
+    const isOwner = Boolean(viewerId && viewerId === comment.player_id);
+    if (isOwner) used += 1;
+    return {
+      name: comment.player_name,
+      body: comment.body,
+      created_at: comment.created_at,
+      is_owner: isOwner
+    };
+  });
 
-  return json({ date, comments });
+  return json({
+    date,
+    comments,
+    used,
+    remaining: Math.max(0, DAILY_COMMENT_LIMIT - used),
+    limit: DAILY_COMMENT_LIMIT
+  });
 }
 
 async function postComment(request, env) {
   const payload = await request.json();
   const challengeDate = String(payload.challenge_date || "");
   const playerId = cleanPlayerId(payload.player_id);
-  const submittedName = cleanPlayerName(payload.player_name);
+  const playerName = cleanPlayerName(payload.player_name);
   const body = cleanComment(payload.body);
 
   if (challengeDate !== challengeDateKey()) {
-    return json({ error: "Table talk closes when the daily board closes." }, 400);
+    return json({ error: "Table talk is only open on today’s board." }, 400);
   }
   if (!playerId) return json({ error: "Invalid player ID." }, 400);
-  if (!body) return json({ error: `Keep the comment between 1 and ${COMMENT_LIMIT} characters.` }, 400);
-
-  const score = await env.DB.prepare(`
-    SELECT player_name
-    FROM daily_scores
-    WHERE challenge_date = ? AND player_id = ?
-  `).bind(challengeDate, playerId).first();
-
-  if (!score) {
-    return json({ error: "Post today’s verified score before commenting." }, 403);
+  if (!playerName) return json({ error: "Use a name from 1 to 20 characters." }, 400);
+  if (!body) {
+    return json({ error: `Keep the comment between 1 and ${COMMENT_CHARACTER_LIMIT} characters.` }, 400);
   }
 
-  const playerName = score.player_name || submittedName;
-  const existing = await env.DB.prepare(`
-    SELECT id
+  const countRow = await env.DB.prepare(`
+    SELECT COUNT(*) AS comment_count
     FROM comments
     WHERE challenge_date = ? AND player_id = ?
   `).bind(challengeDate, playerId).first();
 
-  if (existing) {
-    await env.DB.prepare(`
-      UPDATE comments
-      SET body = ?, player_name = ?, updated_at = datetime('now')
-      WHERE id = ?
-    `).bind(body, playerName, existing.id).run();
-  } else {
-    await env.DB.prepare(`
-      INSERT INTO comments (challenge_date, player_id, player_name, body, created_at, updated_at)
-      VALUES (?, ?, ?, ?, datetime('now'), datetime('now'))
-    `).bind(challengeDate, playerId, playerName, body).run();
+  const used = Number(countRow?.comment_count || 0);
+  if (used >= DAILY_COMMENT_LIMIT) {
+    return json({
+      error: `You’ve used all ${DAILY_COMMENT_LIMIT} comments for today.`,
+      used,
+      remaining: 0,
+      limit: DAILY_COMMENT_LIMIT
+    }, 429);
   }
 
-  return json({ updated: Boolean(existing), name: playerName, body }, existing ? 200 : 201);
+  await env.DB.prepare(`
+    INSERT INTO comments (challenge_date, player_id, player_name, body, created_at)
+    VALUES (?, ?, ?, ?, datetime('now'))
+  `).bind(challengeDate, playerId, playerName, body).run();
+
+  const newUsed = used + 1;
+  return json({
+    name: playerName,
+    body,
+    used: newUsed,
+    remaining: DAILY_COMMENT_LIMIT - newUsed,
+    limit: DAILY_COMMENT_LIMIT
+  }, 201);
 }
