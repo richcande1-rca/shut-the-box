@@ -86,8 +86,9 @@ function mulberry32(seed) {
   };
 }
 
-function dailyDiceAt(dateKey, index) {
-  const random = mulberry32(hashString(`shut-the-box:${dateKey}`));
+function dailyDiceAt(dateKey, playerId, attemptNumber, index) {
+  const seedText = `shut-the-box-v3:${dateKey}:${playerId}:${attemptNumber}`;
+  const random = mulberry32(hashString(seedText));
   let first = 1;
   let second = 1;
 
@@ -116,7 +117,7 @@ function hasCombination(values, target) {
   return search(0, target);
 }
 
-function verifyRun(dateKey, moves) {
+function verifyRun(dateKey, playerId, attemptNumber, moves) {
   if (!Array.isArray(moves) || moves.length > TILE_VALUES.length) {
     throw new Error("Invalid move history.");
   }
@@ -139,7 +140,7 @@ function verifyRun(dateKey, moves) {
       }
     }
 
-    const target = sum(dailyDiceAt(dateKey, rollIndex));
+    const target = sum(dailyDiceAt(dateKey, playerId, attemptNumber, rollIndex));
     if (sum(move) !== target) {
       throw new Error("A move did not match its roll.");
     }
@@ -151,7 +152,7 @@ function verifyRun(dateKey, moves) {
     return { score: 0, rollsUsed: moves.length };
   }
 
-  const finalTarget = sum(dailyDiceAt(dateKey, moves.length));
+  const finalTarget = sum(dailyDiceAt(dateKey, playerId, attemptNumber, moves.length));
   if (hasCombination(openTiles, finalTarget)) {
     throw new Error("The submitted run stopped before it was over.");
   }
@@ -244,14 +245,14 @@ async function postScore(request, env) {
     }, 429);
   }
 
+  const attemptNumber = attemptsUsed + 1;
   let verified;
   try {
-    verified = verifyRun(challengeDate, body.moves);
+    verified = verifyRun(challengeDate, playerId, attemptNumber, body.moves);
   } catch (error) {
     return json({ error: error.message || "The run could not be verified." }, 400);
   }
 
-  const attemptNumber = attemptsUsed + 1;
   const serializedMoves = JSON.stringify(body.moves);
 
   await env.DB.prepare(`
@@ -339,7 +340,8 @@ async function postScore(request, env) {
     attempts_remaining: DAILY_ATTEMPT_LIMIT - attemptNumber,
     best_score: Number(best.score),
     best_rolls_used: Number(best.rolls_used),
-    improved
+    improved,
+    dice_mode: "player-random-v1"
   }, 201);
 }
 
