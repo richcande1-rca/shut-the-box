@@ -2,6 +2,7 @@
 
 const DAILY_DICE_VERSION = "player-random-v1";
 let dailyFinished = false;
+let resolvingDiscard = false;
 
 function activeDailyAttemptNumber() {
   if (dailySubmitted && attemptsUsed > 0) return attemptsUsed;
@@ -25,6 +26,12 @@ function playerDailyDiceAt(index) {
 
 dailyDiceAt = playerDailyDiceAt;
 
+function dailyBestSummary() {
+  return bestDailyScore === null
+    ? "No score was posted."
+    : `Best score: ${bestDailyScore}.`;
+}
+
 const originalWriteDailyState = writeDailyState;
 writeDailyState = function writeRandomDailyState() {
   originalWriteDailyState();
@@ -45,7 +52,7 @@ function setRandomDailyInstruction() {
   if (mode !== "daily" || roundOver || currentRoll !== null) return;
 
   if (dailyFinished) {
-    setInstruction(`Daily complete. Best score: ${bestDailyScore}.`);
+    setInstruction(`Daily complete. ${dailyBestSummary()}`);
   } else if (attemptsUsed >= DAILY_ATTEMPT_LIMIT && dailySubmitted) {
     setInstruction(`All ${DAILY_ATTEMPT_LIMIT} daily attempts are complete.`);
   } else if (attemptStarted) {
@@ -55,12 +62,11 @@ function setRandomDailyInstruction() {
   }
 }
 
-const stopDailyButton = document.createElement("button");
-stopDailyButton.className = "action-button shut-button result-button";
-stopDailyButton.type = "button";
-stopDailyButton.textContent = "STOP FOR TODAY";
-stopDailyButton.hidden = true;
-playAgainButton.insertAdjacentElement("afterend", stopDailyButton);
+const secondaryDailyButton = document.createElement("button");
+secondaryDailyButton.className = "action-button shut-button result-button";
+secondaryDailyButton.type = "button";
+secondaryDailyButton.hidden = true;
+playAgainButton.insertAdjacentElement("afterend", secondaryDailyButton);
 
 const originalUpdateModeDisplay = updateModeDisplay;
 updateModeDisplay = function updateRandomDailyModeDisplay() {
@@ -68,19 +74,43 @@ updateModeDisplay = function updateRandomDailyModeDisplay() {
 
   if (mode === "daily" && roundOver && !dailySubmitted) {
     playAgainButton.textContent = "POST ATTEMPT";
-    playAgainButton.disabled = false;
+    playAgainButton.disabled = resolvingDiscard;
   } else if (mode === "daily" && dailyFinished) {
     playAgainButton.textContent = "PRACTICE";
     playAgainButton.disabled = false;
   }
 
-  stopDailyButton.hidden = !(
+  const canDiscard = (
+    mode === "daily"
+    && roundOver
+    && !dailySubmitted
+    && dailyScore !== null
+    && dailyScore > 0
+    && attemptsUsed < DAILY_ATTEMPT_LIMIT
+  );
+
+  const canStop = (
     mode === "daily"
     && roundOver
     && dailySubmitted
     && !dailyFinished
     && attemptsUsed < DAILY_ATTEMPT_LIMIT
   );
+
+  if (canDiscard) {
+    secondaryDailyButton.hidden = false;
+    secondaryDailyButton.textContent = attemptsUsed + 1 < DAILY_ATTEMPT_LIMIT
+      ? "DISCARD & PLAY NEXT"
+      : "DISCARD & FINISH";
+    secondaryDailyButton.disabled = resolvingDiscard;
+  } else if (canStop) {
+    secondaryDailyButton.hidden = false;
+    secondaryDailyButton.textContent = "STOP FOR TODAY";
+    secondaryDailyButton.disabled = false;
+  } else {
+    secondaryDailyButton.hidden = true;
+    secondaryDailyButton.disabled = false;
+  }
 };
 
 const originalUpdateChallengePanel = updateChallengePanel;
@@ -119,6 +149,7 @@ updateDisplay = function updateRandomDailyDisplay() {
 const originalRestoreDailyState = restoreDailyState;
 restoreDailyState = function restoreRandomDailyState() {
   dailyFinished = false;
+  resolvingDiscard = false;
   originalRestoreDailyState();
 
   const state = readDailyState();
@@ -127,11 +158,11 @@ restoreDailyState = function restoreRandomDailyState() {
 
   if (dailyFinished) {
     writeDailyState();
-    setInstruction(`Daily complete. Best score: ${bestDailyScore}.`);
+    setInstruction(`Daily complete. ${dailyBestSummary()}`);
     if (roundOver) {
       roundResultDetail.textContent = bestDailyScore === 0
         ? "Perfect score posted. No more attempts needed."
-        : `Stopped after attempt ${attemptsUsed}. Best score: ${bestDailyScore}.`;
+        : `Stopped after attempt ${attemptsUsed}. ${dailyBestSummary()}`;
     }
     updateDisplay();
   } else {
@@ -145,6 +176,71 @@ startNextDailyAttempt = function startNextRandomDailyAttempt() {
   originalStartNextDailyAttempt();
   setRandomDailyInstruction();
 };
+
+async function discardCurrentAttempt() {
+  if (
+    resolvingDiscard
+    || mode !== "daily"
+    || !roundOver
+    || dailySubmitted
+    || dailyScore === null
+    || dailyScore === 0
+    || attemptsUsed >= DAILY_ATTEMPT_LIMIT
+  ) return;
+
+  const attemptNumber = attemptsUsed + 1;
+  resolvingDiscard = true;
+  secondaryDailyButton.disabled = true;
+  playAgainButton.disabled = true;
+  submitScoreButton.disabled = true;
+  submissionStatusElement.textContent = `Discarding attempt ${attemptNumber}…`;
+
+  try {
+    const response = await fetch(`${API_BASE}/attempts`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        challenge_date: challengeDate,
+        player_id: getPlayerId(),
+        player_name: playerName || readPlayerName() || "Player",
+        attempt_number: attemptNumber,
+        moves: moveHistory
+      })
+    });
+
+    const data = await response.json();
+    if (!response.ok) {
+      throw new Error(data.error || "The attempt could not be discarded.");
+    }
+
+    attemptsUsed = Number.isInteger(data.attempt_number)
+      ? data.attempt_number
+      : attemptNumber;
+    dailySubmitted = true;
+
+    if (attemptsUsed >= DAILY_ATTEMPT_LIMIT) {
+      dailyFinished = true;
+      writeDailyState();
+      setInstruction(`Daily complete. ${dailyBestSummary()}`);
+      roundResultDetail.textContent = `Attempt ${attemptsUsed} discarded. ${dailyBestSummary()}`;
+      submissionStatusElement.textContent = `Attempt ${attemptsUsed} discarded.`;
+      updateDisplay();
+    } else {
+      writeDailyState();
+      submissionStatusElement.textContent = `Attempt ${attemptsUsed} discarded.`;
+      submitScoreButton.disabled = false;
+      resolvingDiscard = false;
+      startNextDailyAttempt();
+      return;
+    }
+  } catch (error) {
+    submissionStatusElement.textContent = error.message || "The attempt could not be discarded.";
+  } finally {
+    resolvingDiscard = false;
+    submitScoreButton.disabled = false;
+    updateDisplay();
+  }
+}
 
 playAgainButton.addEventListener("click", (event) => {
   if (mode !== "daily") return;
@@ -163,19 +259,20 @@ playAgainButton.addEventListener("click", (event) => {
   }
 }, true);
 
-stopDailyButton.addEventListener("click", () => {
-  if (
-    mode !== "daily"
-    || !roundOver
-    || !dailySubmitted
-    || dailyFinished
-    || attemptsUsed >= DAILY_ATTEMPT_LIMIT
-  ) return;
+secondaryDailyButton.addEventListener("click", () => {
+  if (mode !== "daily" || !roundOver || dailyFinished) return;
+
+  if (!dailySubmitted) {
+    discardCurrentAttempt();
+    return;
+  }
+
+  if (attemptsUsed >= DAILY_ATTEMPT_LIMIT) return;
 
   dailyFinished = true;
   writeDailyState();
-  setInstruction(`Daily complete. Best score: ${bestDailyScore}.`);
-  roundResultDetail.textContent = `Stopped after attempt ${attemptsUsed}. Best score: ${bestDailyScore}.`;
+  setInstruction(`Daily complete. ${dailyBestSummary()}`);
+  roundResultDetail.textContent = `Stopped after attempt ${attemptsUsed}. ${dailyBestSummary()}`;
   updateDisplay();
 });
 
@@ -184,12 +281,12 @@ if (bannerCopy) bannerCopy.textContent = "Three attempts. Fresh dice every time.
 
 const boardNote = document.querySelector(".daily-board-note");
 if (boardNote) {
-  boardNote.textContent = "Play up to three verified random attempts. Stop whenever you like; only your best score stays on the board.";
+  boardNote.textContent = "Play up to three verified random attempts. Post a score or discard the round and move on. Only posted scores reach the board.";
 }
 
 const rulesCopy = document.querySelector(".rules p");
 if (rulesCopy) {
-  rulesCopy.textContent = "Play up to three independent daily rounds with fresh dice each time. Shut tiles that total each roll. Stop whenever you like; your best verified score stays on the board.";
+  rulesCopy.textContent = "Play up to three independent daily rounds with fresh dice each time. Post the score you want to keep, discard a bad round, or stop early. Your best posted score stays on the board.";
 }
 
 const restoredState = readDailyState();
