@@ -27,6 +27,10 @@ export default {
         return await postScore(request, env);
       }
 
+      if (request.method === "POST" && url.pathname === "/attempts") {
+        return await discardAttempt(request, env);
+      }
+
       if (request.method === "GET" && url.pathname === "/comments") {
         return await getComments(url, env);
       }
@@ -175,6 +179,24 @@ function cleanComment(value) {
   return cleaned.length >= 1 && cleaned.length <= COMMENT_CHARACTER_LIMIT ? cleaned : "";
 }
 
+async function getAttemptCount(env, challengeDate, playerId) {
+  const row = await env.DB.prepare(`
+    SELECT COUNT(*) AS attempts_used
+    FROM daily_attempts
+    WHERE challenge_date = ? AND player_id = ?
+  `).bind(challengeDate, playerId).first();
+
+  return Number(row?.attempts_used || 0);
+}
+
+async function getBestScore(env, challengeDate, playerId) {
+  return env.DB.prepare(`
+    SELECT player_name, score, rolls_used
+    FROM daily_scores
+    WHERE challenge_date = ? AND player_id = ?
+  `).bind(challengeDate, playerId).first();
+}
+
 async function getLeaderboard(url, env) {
   const date = url.searchParams.get("date") || challengeDateKey();
   if (!validDateKey(date)) return json({ error: "Invalid challenge date." }, 400);
@@ -210,6 +232,104 @@ async function getLeaderboard(url, env) {
   });
 }
 
+async function discardAttempt(request, env) {
+  const body = await request.json();
+  const challengeDate = String(body.challenge_date || "");
+  const playerId = cleanPlayerId(body.player_id);
+  const playerName = cleanPlayerName(body.player_name) || "Player";
+  const attemptNumber = Number(body.attempt_number);
+
+  if (challengeDate !== challengeDateKey()) {
+    return json({ error: "Only today’s challenge can be used." }, 400);
+  }
+
+  if (!playerId) return json({ error: "Invalid player ID." }, 400);
+
+  if (
+    !Number.isInteger(attemptNumber)
+    || attemptNumber < 1
+    || attemptNumber > DAILY_ATTEMPT_LIMIT
+  ) {
+    return json({ error: "Invalid attempt number." }, 400);
+  }
+
+  const existingAttempt = await env.DB.prepare(`
+    SELECT score, rolls_used
+    FROM daily_attempts
+    WHERE challenge_date = ? AND player_id = ? AND attempt_number = ?
+  `).bind(challengeDate, playerId, attemptNumber).first();
+
+  if (existingAttempt) {
+    return json({
+      discarded: true,
+      already_recorded: true,
+      score: Number(existingAttempt.score),
+      rolls_used: Number(existingAttempt.rolls_used),
+      attempt_number: attemptNumber,
+      attempts_remaining: DAILY_ATTEMPT_LIMIT - attemptNumber,
+      dice_mode: "player-random-v1"
+    });
+  }
+
+  const attemptsUsed = await getAttemptCount(env, challengeDate, playerId);
+  if (attemptsUsed >= DAILY_ATTEMPT_LIMIT) {
+    const best = await getBestScore(env, challengeDate, playerId);
+    return json({
+      error: `All ${DAILY_ATTEMPT_LIMIT} daily attempts have already been used.`,
+      attempts_used: attemptsUsed,
+      best_score: best ? Number(best.score) : null,
+      best_rolls_used: best ? Number(best.rolls_used) : null
+    }, 429);
+  }
+
+  const expectedAttempt = attemptsUsed + 1;
+  if (attemptNumber !== expectedAttempt) {
+    return json({
+      error: `The next available attempt is ${expectedAttempt}.`,
+      expected_attempt: expectedAttempt,
+      attempts_used: attemptsUsed
+    }, 409);
+  }
+
+  let verified;
+  try {
+    verified = verifyRun(challengeDate, playerId, attemptNumber, body.moves);
+  } catch (error) {
+    return json({ error: error.message || "The run could not be verified." }, 400);
+  }
+
+  await env.DB.prepare(`
+    INSERT INTO daily_attempts (
+      challenge_date,
+      player_id,
+      player_name,
+      attempt_number,
+      score,
+      rolls_used,
+      moves,
+      created_at
+    )
+    VALUES (?, ?, ?, ?, ?, ?, ?, datetime('now'))
+  `).bind(
+    challengeDate,
+    playerId,
+    playerName,
+    attemptNumber,
+    verified.score,
+    verified.rollsUsed,
+    JSON.stringify(body.moves)
+  ).run();
+
+  return json({
+    discarded: true,
+    score: verified.score,
+    rolls_used: verified.rollsUsed,
+    attempt_number: attemptNumber,
+    attempts_remaining: DAILY_ATTEMPT_LIMIT - attemptNumber,
+    dice_mode: "player-random-v1"
+  }, 201);
+}
+
 async function postScore(request, env) {
   const body = await request.json();
   const challengeDate = String(body.challenge_date || "");
@@ -223,19 +343,9 @@ async function postScore(request, env) {
   if (!playerId) return json({ error: "Invalid player ID." }, 400);
   if (!playerName) return json({ error: "Use a name from 1 to 20 characters." }, 400);
 
-  const attemptCount = await env.DB.prepare(`
-    SELECT COUNT(*) AS attempts_used
-    FROM daily_attempts
-    WHERE challenge_date = ? AND player_id = ?
-  `).bind(challengeDate, playerId).first();
-
-  const attemptsUsed = Number(attemptCount?.attempts_used || 0);
+  const attemptsUsed = await getAttemptCount(env, challengeDate, playerId);
   if (attemptsUsed >= DAILY_ATTEMPT_LIMIT) {
-    const best = await env.DB.prepare(`
-      SELECT player_name, score, rolls_used
-      FROM daily_scores
-      WHERE challenge_date = ? AND player_id = ?
-    `).bind(challengeDate, playerId).first();
+    const best = await getBestScore(env, challengeDate, playerId);
 
     return json({
       error: `All ${DAILY_ATTEMPT_LIMIT} daily attempts have already been used.`,
@@ -277,11 +387,7 @@ async function postScore(request, env) {
     serializedMoves
   ).run();
 
-  const existing = await env.DB.prepare(`
-    SELECT player_name, score, rolls_used
-    FROM daily_scores
-    WHERE challenge_date = ? AND player_id = ?
-  `).bind(challengeDate, playerId).first();
+  const existing = await getBestScore(env, challengeDate, playerId);
 
   const improved = !existing
     || verified.score < Number(existing.score)
