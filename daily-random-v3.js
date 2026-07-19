@@ -1,6 +1,7 @@
 "use strict";
 
 const DAILY_DICE_VERSION = "player-random-v1";
+let dailyFinished = false;
 
 function activeDailyAttemptNumber() {
   if (dailySubmitted && attemptsUsed > 0) return attemptsUsed;
@@ -33,6 +34,7 @@ writeDailyState = function writeRandomDailyState() {
     const state = readDailyState();
     if (!state) return;
     state.diceVersion = DAILY_DICE_VERSION;
+    state.finishedEarly = dailyFinished;
     localStorage.setItem(dailyStorageKey, JSON.stringify(state));
   } catch {
     // The game remains playable when browser storage is unavailable.
@@ -42,7 +44,9 @@ writeDailyState = function writeRandomDailyState() {
 function setRandomDailyInstruction() {
   if (mode !== "daily" || roundOver || currentRoll !== null) return;
 
-  if (attemptsUsed >= DAILY_ATTEMPT_LIMIT && dailySubmitted) {
+  if (dailyFinished) {
+    setInstruction(`Daily complete. Best score: ${bestDailyScore}.`);
+  } else if (attemptsUsed >= DAILY_ATTEMPT_LIMIT && dailySubmitted) {
     setInstruction(`All ${DAILY_ATTEMPT_LIMIT} daily attempts are complete.`);
   } else if (attemptStarted) {
     setInstruction("Daily attempt resumed. Roll when ready.");
@@ -51,29 +55,141 @@ function setRandomDailyInstruction() {
   }
 }
 
+const stopDailyButton = document.createElement("button");
+stopDailyButton.className = "action-button shut-button result-button";
+stopDailyButton.type = "button";
+stopDailyButton.textContent = "STOP FOR TODAY";
+stopDailyButton.hidden = true;
+playAgainButton.insertAdjacentElement("afterend", stopDailyButton);
+
+const originalUpdateModeDisplay = updateModeDisplay;
+updateModeDisplay = function updateRandomDailyModeDisplay() {
+  originalUpdateModeDisplay();
+
+  if (mode === "daily" && roundOver && !dailySubmitted) {
+    playAgainButton.textContent = "POST ATTEMPT";
+    playAgainButton.disabled = false;
+  } else if (mode === "daily" && dailyFinished) {
+    playAgainButton.textContent = "PRACTICE";
+    playAgainButton.disabled = false;
+  }
+
+  stopDailyButton.hidden = !(
+    mode === "daily"
+    && roundOver
+    && dailySubmitted
+    && !dailyFinished
+    && attemptsUsed < DAILY_ATTEMPT_LIMIT
+  );
+};
+
+const originalUpdateChallengePanel = updateChallengePanel;
+updateChallengePanel = function updateRandomDailyChallengePanel() {
+  originalUpdateChallengePanel();
+
+  if (mode === "daily" && dailyFinished) {
+    challengeStatusElement.textContent = "DONE";
+    challengeStatusElement.dataset.state = "complete";
+  }
+};
+
+function syncPerfectDailyFinish() {
+  if (!dailyFinished && dailySubmitted && bestDailyScore === 0) {
+    dailyFinished = true;
+    return true;
+  }
+  return false;
+}
+
+const originalUpdateDisplay = updateDisplay;
+updateDisplay = function updateRandomDailyDisplay() {
+  const perfectJustPosted = syncPerfectDailyFinish();
+  if (perfectJustPosted) writeDailyState();
+
+  originalUpdateDisplay();
+
+  if (perfectJustPosted && mode === "daily") {
+    setInstruction("Perfect score posted. Daily complete.");
+    if (roundOver) {
+      roundResultDetail.textContent = "Perfect score posted. No more attempts needed.";
+    }
+  }
+};
+
 const originalRestoreDailyState = restoreDailyState;
 restoreDailyState = function restoreRandomDailyState() {
+  dailyFinished = false;
   originalRestoreDailyState();
-  setRandomDailyInstruction();
+
+  const state = readDailyState();
+  dailyFinished = Boolean(state?.finishedEarly)
+    || (dailySubmitted && bestDailyScore === 0);
+
+  if (dailyFinished) {
+    writeDailyState();
+    setInstruction(`Daily complete. Best score: ${bestDailyScore}.`);
+    if (roundOver) {
+      roundResultDetail.textContent = bestDailyScore === 0
+        ? "Perfect score posted. No more attempts needed."
+        : `Stopped after attempt ${attemptsUsed}. Best score: ${bestDailyScore}.`;
+    }
+    updateDisplay();
+  } else {
+    setRandomDailyInstruction();
+  }
 };
 
 const originalStartNextDailyAttempt = startNextDailyAttempt;
 startNextDailyAttempt = function startNextRandomDailyAttempt() {
+  if (dailyFinished) return;
   originalStartNextDailyAttempt();
   setRandomDailyInstruction();
 };
+
+playAgainButton.addEventListener("click", (event) => {
+  if (mode !== "daily") return;
+
+  if (roundOver && !dailySubmitted) {
+    event.preventDefault();
+    event.stopImmediatePropagation();
+    scoreForm.requestSubmit();
+    return;
+  }
+
+  if (dailyFinished) {
+    event.preventDefault();
+    event.stopImmediatePropagation();
+    startPractice();
+  }
+}, true);
+
+stopDailyButton.addEventListener("click", () => {
+  if (
+    mode !== "daily"
+    || !roundOver
+    || !dailySubmitted
+    || dailyFinished
+    || attemptsUsed >= DAILY_ATTEMPT_LIMIT
+  ) return;
+
+  dailyFinished = true;
+  writeDailyState();
+  setInstruction(`Daily complete. Best score: ${bestDailyScore}.`);
+  roundResultDetail.textContent = `Stopped after attempt ${attemptsUsed}. Best score: ${bestDailyScore}.`;
+  updateDisplay();
+});
 
 const bannerCopy = document.querySelector(".daily-banner p");
 if (bannerCopy) bannerCopy.textContent = "Three attempts. Fresh dice every time.";
 
 const boardNote = document.querySelector(".daily-board-note");
 if (boardNote) {
-  boardNote.textContent = "Each player gets three verified random attempts. Only the best score stays on the board.";
+  boardNote.textContent = "Play up to three verified random attempts. Stop whenever you like; only your best score stays on the board.";
 }
 
 const rulesCopy = document.querySelector(".rules p");
 if (rulesCopy) {
-  rulesCopy.textContent = "Play three independent daily rounds with fresh dice each time. Shut tiles that total each roll. Your best verified score stays on the board.";
+  rulesCopy.textContent = "Play up to three independent daily rounds with fresh dice each time. Shut tiles that total each roll. Stop whenever you like; your best verified score stays on the board.";
 }
 
 const restoredState = readDailyState();
@@ -88,6 +204,9 @@ if (needsFreshAttempt) {
   writeDailyState();
   updateDisplay();
 } else {
+  dailyFinished = Boolean(restoredState?.finishedEarly)
+    || (dailySubmitted && bestDailyScore === 0);
   writeDailyState();
   setRandomDailyInstruction();
+  updateDisplay();
 }
